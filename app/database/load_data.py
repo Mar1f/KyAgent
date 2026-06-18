@@ -13,8 +13,13 @@ project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(_
 sys.path.insert(0, project_root) # Use insert(0, ...) to prioritize project root
 # --- End Path Correction --- 
 
+from dotenv import load_dotenv
+
+dotenv_path = os.path.join(project_root, '.env')
+load_dotenv(dotenv_path=dotenv_path)
+
 try:
-    from app_config import DATABASE_URL
+    from app_config import DATABASE_URL, DB_ENV_VARS, validate_required_env
     # Import updated models
     # Now that project root is in path, we might need to adjust this import if models.py also needs root access
     # Let's keep it as is for now, assuming models.py can find app_config.py
@@ -113,6 +118,42 @@ def get_or_create_school(session, school_data):
             return None
     return school
 
+def update_program_from_data(program, program_data):
+    """Update a Program ORM object with the latest imported values."""
+    for field, value in program_data.items():
+        setattr(program, field, value)
+
+
+def find_existing_program(session, school_id, program_data):
+    """Find an existing program row for idempotent imports."""
+    year = program_data.get('year')
+    if not school_id or not year:
+        return None
+
+    program_code = program_data.get('program_code')
+    program_name = program_data.get('program_name')
+    program_type = program_data.get('program_type')
+
+    query = session.query(Program).filter(
+        Program.school_id == school_id,
+        Program.year == year
+    )
+
+    normalized_code = str(program_code).strip() if program_code is not None else None
+    if normalized_code:
+        existing = query.filter(Program.program_code == normalized_code).first()
+        if existing:
+            return existing
+
+    if program_name:
+        fallback_query = query.filter(Program.program_name == program_name)
+        if program_type:
+            fallback_query = fallback_query.filter(Program.program_type == program_type)
+        return fallback_query.first()
+
+    return None
+
+
 def load_excel_data(session, file_path):
     """Loads data from a single Excel file into the database."""
     logging.info(f"Processing file: {file_path}")
@@ -209,10 +250,14 @@ def load_excel_data(session, file_path):
                 logging.warning(f"Skipping row {index+2} sheet '{sheet_name}': Error converting year - {e}. Data: {program_data}")
                 continue
 
-            # Add program line if essential data is present
+            # Add or update program line if essential data is present
             if school and school.id and program_data.get('year') and program_data.get('program_name'):
-                program_line = Program(school_id=school.id, **program_data)
-                session.add(program_line)
+                existing_program = find_existing_program(session, school.id, program_data)
+                if existing_program:
+                    update_program_from_data(existing_program, program_data)
+                else:
+                    program_line = Program(school_id=school.id, **program_data)
+                    session.add(program_line)
                 rows_in_sheet += 1
             # else: # Debugging skipped rows
             #     if not school or not school.id:
@@ -230,10 +275,17 @@ def load_excel_data(session, file_path):
 
 def main():
     logging.info("Starting data loading process...")
+
+    try:
+        validate_required_env(DB_ENV_VARS, context="load_data.py database loading")
+    except ValueError as exc:
+        logging.error(f"Configuration error: {exc}")
+        return
+
     engine = create_engine(DATABASE_URL)
     # Ensure tables are created based on models before loading data
     try:
-        logging.info(f"Ensuring tables exist for database specified in {DATABASE_URL}...")
+        logging.info("Ensuring tables exist for configured database...")
         Base.metadata.create_all(bind=engine)
         logging.info("Database tables checked/created successfully.")
     except Exception as e:
