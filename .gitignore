@@ -142,6 +142,9 @@ yarn-debug.log*
 yarn-error.log*
 lerna-debug.log*
 
+# Project tool state
+.claude/
+
 # OS generated files
 .DS_Store
-Thumbs.db 
+Thumbs.db
