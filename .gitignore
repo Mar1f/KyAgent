@@ -131,8 +131,10 @@ cython_debug/
 *.key
 credentials.*
 config.py # Add if storing sensitive info directly
-.env*
-! .env.example # Allow example env files
+.env
+.env.local
+.env.*.local
+!.env.example # Allow example env files
 
 # Logs
 logs/
