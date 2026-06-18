@@ -8,6 +8,8 @@ from openai import OpenAI, APIError, AuthenticationError, RateLimitError, APITim
 dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(dotenv_path=dotenv_path)
 
+from app_config import LLM_ENV_VARS, validate_required_env
+
 # Get API Key
 api_key = os.getenv("OPENAI_API_KEY")
 
@@ -24,9 +26,10 @@ def test_openai_connection():
     print("--- OpenAI API Connection Test (via Proxy) --- ")
 
     # 1. Check if API Key is loaded
-    if not api_key:
-        print("Error: OPENAI_API_KEY not found in environment variables.")
-        print("Please ensure it is set correctly in your .env file.")
+    try:
+        validate_required_env(LLM_ENV_VARS, context="test_openai_api.py")
+    except ValueError as exc:
+        print(f"Configuration error: {exc}")
         return
     else:
         masked_key = api_key[:5] + "..." + api_key[-4:]

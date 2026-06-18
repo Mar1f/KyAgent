@@ -8,39 +8,45 @@ import subprocess
 project_root = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(project_root)
 
+dotenv_path = os.path.join(project_root, '.env')
+load_dotenv(dotenv_path=dotenv_path)
+
 try:
-    from app_config import DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME
+    from app_config import DB_ENV_VARS, DB_HOST, DB_PORT, DB_USER, DB_PASSWORD, DB_NAME, validate_required_env
 except ImportError:
     print("Error: Could not import database configuration from app_config.py.")
     print("Ensure app_config.py exists in the project root and contains DB variables.")
     sys.exit(1)
 
-# Load environment variables (might be redundant if app_config.py already does it, but safe)
-load_dotenv()
 
 def create_database():
     """Create MySQL database if it doesn't exist"""
     connection = None
     cursor = None
     try:
+        validate_required_env(DB_ENV_VARS, context="setup.py database creation")
+
         print(f"Attempting to connect to MySQL server at {DB_HOST}:{DB_PORT}...")
         # Connect to MySQL server (without specifying database)
         connection = mysql.connector.connect(
             host=DB_HOST,
-            port=int(DB_PORT), # Ensure port is integer
+            port=int(DB_PORT),
             user=DB_USER,
             password=DB_PASSWORD
         )
         print("MySQL server connection successful.")
-        
+
         # Create database if not exists
         cursor = connection.cursor()
         print(f"Executing: CREATE DATABASE IF NOT EXISTS {DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
         cursor.execute(f"CREATE DATABASE IF NOT EXISTS {DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
-        
+
         print(f"Database '{DB_NAME}' created or already exists.")
         return True
-        
+
+    except ValueError as err:
+        print(f"Configuration error: {err}")
+        return False
     except mysql.connector.Error as err:
         print(f"Error connecting to or creating database: {err}")
         if err.errno == mysql.connector.errorcode.ER_ACCESS_DENIED_ERROR:
@@ -61,13 +67,14 @@ def create_database():
             connection.close()
             print("MySQL connection closed.")
 
+
 def run_data_loader():
     """Runs the data loading script from its new location."""
     script_path = os.path.join(project_root, 'app', 'database', 'load_data.py')
     if not os.path.exists(script_path):
         print(f"Error: Data loading script not found at {script_path}")
         return False
-        
+
     print(f"Running data loading script: {script_path}...")
     try:
         # Ensure using the correct python interpreter (could be sys.executable)
@@ -95,28 +102,30 @@ def run_data_loader():
          print(f"An unexpected error occurred while running the data loader: {e}")
          return False
 
+
 def main():
     print("--- KyAgent Setup Start ---")
-    
+
     # 1. Create database if it doesn't exist
     print("\nStep 1: Checking/Creating Database...")
     if not create_database():
         print("\nStep 1 Failed: Could not create or verify database. Exiting setup.")
         sys.exit(1)
     print("Step 1 Complete: Database checked/created.")
-    
+
     # 2. Run the data loading script (which also handles table creation)
     print("\nStep 2: Loading data from Excel files...")
     if not run_data_loader():
         print("\nStep 2 Failed: Data loading process encountered errors. Check logs above.")
         # Decide if you want to exit or continue
-        # sys.exit(1) 
+        # sys.exit(1)
     else:
         print("Step 2 Complete: Data loading finished.")
-    
+
     print("\n--- KyAgent Setup Finished ---")
     print("Setup process completed. Please check the logs above for any warnings or errors.")
     print("You can now try running the application with: python run.py")
 
+
 if __name__ == "__main__":
-    main() 
+    main()
