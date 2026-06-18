@@ -14,7 +14,6 @@ from io import StringIO
 # --- ADDED IMPORTS FOR AUTH ---
 import streamlit_authenticator as stauth
 import bcrypt
-from dotenv import load_dotenv
 # --- END ADDED IMPORTS ---
 
 # --- Ensure project root is in sys.path --- 
@@ -24,10 +23,6 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root) # Insert at beginning
     print(f"[Debug] Added to sys.path: {project_root}") # Optional debug print
 # --- End Path Addition ---
-
-# --- Load Environment Variables ---
-load_dotenv() # Load .env file for DB creds and AUTH_COOKIE_KEY
-# --- End Env Loading ---
 
 # Now imports should work relative to the project root
 try:
@@ -143,14 +138,7 @@ def get_discipline_stats():
     """Get statistics about program discipline categories."""
     db = DatabaseManager()
     try:
-        programs = db.get_all_programs()
-        if not programs:
-             return pd.DataFrame()
-        program_data = [{'discipline': p.discipline_category} for p in programs]
-        df = pd.DataFrame(program_data)
-        discipline_counts = df['discipline'].value_counts().reset_index()
-        discipline_counts.columns = ['discipline', 'count']
-        return discipline_counts
+        return db.get_discipline_counts()
     except Exception as e:
         st.error(f"Error fetching discipline stats: {e}")
         return pd.DataFrame()
