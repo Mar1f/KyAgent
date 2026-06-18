@@ -1,3 +1,4 @@
+from sqlalchemy import func
 from sqlalchemy.orm import sessionmaker, joinedload
 from app.database.models import engine, School, Program, SessionLocal
 import pandas as pd
@@ -42,6 +43,30 @@ class DatabaseManager:
             Program.program_code == code,
             Program.year == year
         ).first()
+
+    def find_existing_program(self, school_id, year, program_code=None, program_name=None, program_type=None):
+        """Find an existing program row for idempotent imports."""
+        if not school_id or not year:
+            return None
+
+        query = self.session.query(Program).filter(
+            Program.school_id == school_id,
+            Program.year == year
+        )
+
+        normalized_code = str(program_code).strip() if program_code is not None else None
+        if normalized_code:
+            existing = query.filter(Program.program_code == normalized_code).first()
+            if existing:
+                return existing
+
+        if program_name:
+            fallback_query = query.filter(Program.program_name == program_name)
+            if program_type:
+                fallback_query = fallback_query.filter(Program.program_type == program_type)
+            return fallback_query.first()
+
+        return None
     
     def get_programs_by_school(self, school_name, years=None):
         """Get all programs for a specific school, optionally filtered by years"""
@@ -129,6 +154,25 @@ class DatabaseManager:
         """Get distinct discipline categories from the programs table."""
         disciplines = self.session.query(Program.discipline_category).distinct().order_by(Program.discipline_category).all()
         return [d[0] for d in disciplines if d[0]] # Return list of non-null disciplines
+
+    def get_discipline_counts(self):
+        """Get aggregated counts by discipline category."""
+        rows = self.session.query(
+            Program.discipline_category,
+            func.count(Program.id)
+        ).filter(
+            Program.discipline_category.isnot(None)
+        ).group_by(
+            Program.discipline_category
+        ).order_by(
+            func.count(Program.id).desc(),
+            Program.discipline_category.asc()
+        ).all()
+
+        return pd.DataFrame([
+            {"discipline": discipline, "count": count}
+            for discipline, count in rows
+        ])
 
     # The complex data loading from CSV is no longer needed here.
     # def load_data_from_csv(self, csv_file):

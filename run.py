@@ -2,10 +2,18 @@ import os
 import sys
 import subprocess
 
+from dotenv import load_dotenv
+
+
 def main():
     """Run the application"""
     print("Starting KyAgent - 考研信息查询系统")
-    
+
+    dotenv_path = os.path.join(os.path.dirname(__file__), ".env")
+    load_dotenv(dotenv_path=dotenv_path)
+
+    from app_config import DB_ENV_VARS, validate_required_env
+
     # Check if conda environment is activated
     if os.environ.get("CONDA_DEFAULT_ENV") != "py310":
         print("Warning: py310 conda environment is not activated.")
@@ -14,28 +22,22 @@ def main():
         if user_input.lower() != "y":
             print("Exiting...")
             sys.exit(0)
-    
+
+    try:
+        validate_required_env(DB_ENV_VARS, context="run.py database preflight")
+    except ValueError as exc:
+        print(f"Configuration error: {exc}")
+        sys.exit(1)
+
     # Check if MySQL is running
     try:
-        # Use a simple command to check if MySQL is running
         import mysql.connector
-        from dotenv import load_dotenv
-        
-        # Load environment variables
-        load_dotenv()
-        
-        # Get database configuration
-        db_host = os.getenv("DB_HOST")
-        db_port = os.getenv("DB_PORT")
-        db_user = os.getenv("DB_USER")
-        db_password = os.getenv("DB_PASSWORD")
-        
-        # Try to connect
+
         connection = mysql.connector.connect(
-            host=db_host,
-            port=db_port,
-            user=db_user,
-            password=db_password
+            host=os.getenv("DB_HOST"),
+            port=int(os.getenv("DB_PORT")),
+            user=os.getenv("DB_USER"),
+            password=os.getenv("DB_PASSWORD")
         )
         connection.close()
         print("MySQL connection successful.")
@@ -46,10 +48,11 @@ def main():
         if user_input.lower() != "y":
             print("Exiting...")
             sys.exit(0)
-    
+
     # Run Streamlit application
     print("Starting Streamlit application...")
     subprocess.run(["streamlit", "run", "app/app.py"])
 
+
 if __name__ == "__main__":
-    main() 
+    main()
