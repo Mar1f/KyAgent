@@ -22,6 +22,16 @@ class DatabaseManager:
         """Get all users for authentication."""
         return self.session.query(User).order_by(User.username).all()
 
+    def get_auth_credentials(self):
+        """Get authenticator credentials derived from the users table."""
+        credentials = {"usernames": {}}
+        for user in self.get_all_users():
+            credentials["usernames"][user.username] = {
+                "name": user.name,
+                "password": user.password,
+            }
+        return credentials
+
     def get_user_by_username(self, username):
         """Get a user by username."""
         return self.session.query(User).filter(User.username == username).first()

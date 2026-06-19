@@ -41,24 +41,17 @@ except ImportError as e:
 # --- Database Helper Functions for Users ---
 
 # @st.cache_data # Cache user data for a short time? Maybe not for auth.
-def fetch_all_users_from_db():
-    """Fetches all users from the database for the authenticator."""
+def fetch_auth_credentials_from_db():
+    """Fetch authenticator credentials from the users table."""
     db = DatabaseManager()
     try:
-        users = db.get_all_users()
-        # Convert User objects to dictionary format needed by authenticator
-        user_list = [{
-            "username": user.username,
-            "name": user.name,
-            "password": user.password # Assuming password field stores the hash
-        } for user in users]
-        return user_list
+        return db.get_auth_credentials()
     except Exception as e:
         st.error(f"Error fetching users from database: {e}")
         # If the User table doesn't exist yet, this will fail.
         # Consider handling the specific exception for "table not found"
-        # For now, return empty list on error.
-        return []
+        # For now, return empty credentials on error.
+        return {"usernames": {}}
     finally:
         db.close()
 
@@ -238,15 +231,8 @@ def main():
         
     # --- Authentication Logic ---
     # Fetch users and prepare credentials dict
-    users = fetch_all_users_from_db()
-    credentials = {"usernames": {}}
-    if users: # Handle case where DB query fails or table is empty
-        for user in users:
-            credentials["usernames"][user['username']] = {
-                "name": user['name'],
-                "password": user['password'] # The stored hash
-            }
-    else:
+    credentials = fetch_auth_credentials_from_db()
+    if not credentials["usernames"]:
         st.warning("没有找到用户信息。请先注册用户")
         # Allow registration even if fetching fails initially
 
@@ -264,10 +250,8 @@ def main():
     )
 
     # --- Render Login/Registration (Using Buttons, No Tabs) ---
-    if "authentication_status" not in st.session_state:
-        st.session_state.authentication_status = None # Initialize if not exists
-    if "show_register_form" not in st.session_state:
-        st.session_state.show_register_form = False # Default to showing login
+    st.session_state.setdefault("authentication_status", None)
+    st.session_state.setdefault("show_register_form", False)
 
     # Only show login/register if not authenticated
     if not st.session_state.authentication_status:
