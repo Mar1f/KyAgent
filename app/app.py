@@ -28,13 +28,11 @@ if project_root not in sys.path:
 try:
     from app.api.langchain_setup import LangChainManager
     from app.database.db_manager import DatabaseManager
-    from app.database.models import Program, User # Import User model
-    from sqlalchemy.orm import joinedload # Import joinedload if needed elsewhere, maybe discipline browsing
 except ImportError as e:
     st.error(f"Fatal Error: Could not import necessary modules: {e}")
     st.error(f"Project Root added to path: {project_root}")
     st.error(f"Current sys.path: {sys.path}")
-    st.error("Please ensure the project structure is correct, the User model exists in models.py, and all dependencies are installed.")
+    st.error("Please ensure the project structure is correct and all dependencies are installed.")
     st.stop() # Stop execution if imports fail
 
 # init_db is primarily for setup, not usually called directly by the app
@@ -115,16 +113,7 @@ def get_school_stats():
     """Get basic school statistics including province and doctoral programs."""
     db = DatabaseManager()
     try:
-        schools = db.get_all_schools()
-        # Ensure province and doctoral_programs are included
-        school_data = [{
-            "name": s.name,
-            "province": s.province, # Needed for heatmap/distribution
-            "type": s.type,
-            "master_programs": s.master_programs,
-            "doctoral_programs": s.doctoral_programs, # Needed for PhD chart
-        } for s in schools]
-        return pd.DataFrame(school_data)
+        return db.get_school_stats_data()
     except Exception as e:
         st.error(f"Error fetching school stats: {e}")
         return pd.DataFrame()
@@ -174,8 +163,7 @@ def get_all_school_names():
      """Get a list of all school names."""
      db = DatabaseManager()
      try:
-         schools = db.get_all_schools()
-         return sorted([s.name for s in schools])
+         return db.get_school_names()
      except Exception as e:
          st.error(f"Error fetching school names: {e}")
          return []

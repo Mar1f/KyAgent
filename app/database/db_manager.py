@@ -41,7 +41,25 @@ class DatabaseManager:
     def get_all_schools(self):
         """Get all schools"""
         return self.session.query(School).order_by(School.name).all()
-    
+
+    def get_school_stats_data(self):
+        """Get school statistics formatted for the home page."""
+        schools = self.get_all_schools()
+        return pd.DataFrame([
+            {
+                "name": s.name,
+                "province": s.province,
+                "type": s.type,
+                "master_programs": s.master_programs,
+                "doctoral_programs": s.doctoral_programs,
+            }
+            for s in schools
+        ])
+
+    def get_school_names(self):
+        """Get a sorted list of school names."""
+        return [school.name for school in self.get_all_schools()]
+
     def get_school_by_name(self, name):
         """Get school by name"""
         return self.session.query(School).filter(School.name == name).first()
