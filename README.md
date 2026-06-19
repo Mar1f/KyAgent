@@ -233,17 +233,13 @@ python setup.py
 
 当前仓库仍有一些可继续优化的点：
 
-- README 与依赖文件进一步清理
 - Prompt 结构收敛
 - `app/app.py` 拆分为更清晰的页面 / service 结构
 - 更完整的测试体系
-
-详见：
-
-- `OPTIMIZATION_PLAN.md`
+- 更细粒度的测试与自动化校验
 
 ---
 
 ## 许可证
 
-如需开源发布，请补充 `LICENSE` 文件并在此处更新许可证说明。
+本项目采用 [MIT License](LICENSE)。
