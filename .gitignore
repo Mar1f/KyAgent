@@ -147,6 +147,9 @@ lerna-debug.log*
 # Project tool state
 .claude/
 
+# IDE files
+.idea/
+
 # OS generated files
 .DS_Store
 Thumbs.db
