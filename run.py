@@ -14,10 +14,12 @@ def main():
 
     from app_config import DB_ENV_VARS, validate_required_env
 
-    # Check if conda environment is activated
-    if os.environ.get("CONDA_DEFAULT_ENV") != "py310":
-        print("Warning: py310 conda environment is not activated.")
-        print("It is recommended to run the application in the py310 environment.")
+    # Check if a project Python environment is active
+    virtual_env = os.environ.get("VIRTUAL_ENV")
+    conda_env = os.environ.get("CONDA_DEFAULT_ENV")
+    if not virtual_env and not conda_env:
+        print("Warning: no Python virtual environment appears to be active.")
+        print("It is recommended to run the application inside .venv or another isolated environment.")
         user_input = input("Continue anyway? (y/n): ")
         if user_input.lower() != "y":
             print("Exiting...")
