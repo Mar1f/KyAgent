@@ -47,7 +47,7 @@ def fetch_all_users_from_db():
     """Fetches all users from the database for the authenticator."""
     db = DatabaseManager()
     try:
-        users = db.session.query(User).all()
+        users = db.get_all_users()
         # Convert User objects to dictionary format needed by authenticator
         user_list = [{
             "username": user.username,
@@ -69,19 +69,17 @@ def add_user_to_db(name, username, hashed_password):
     db = DatabaseManager()
     try:
         # Check if username already exists
-        existing_user = db.session.query(User).filter(User.username == username).first()
+        existing_user = db.get_user_by_username(username)
         if existing_user:
             st.error(f"Username '{username}' already exists.")
             return False
 
         # Create new user
-        new_user = User(name=name, username=username, password=hashed_password)
-        db.session.add(new_user)
-        db.session.commit()
+        db.create_user(name=name, username=username, hashed_password=hashed_password)
         st.success(f"User '{username}' registered successfully.")
         return True
     except Exception as e:
-        db.session.rollback() # Rollback in case of error
+        db.rollback() # Rollback in case of error
         st.error(f"Database error during registration: {e}")
         return False
     finally:
@@ -189,9 +187,7 @@ def get_all_program_names():
      """Get a list of distinct program names."""
      db = DatabaseManager()
      try:
-         # Query distinct program names
-         program_names = db.session.query(Program.program_name).distinct().order_by(Program.program_name).all()
-         return sorted([p[0] for p in program_names if p[0]])
+         return db.get_distinct_program_names()
      except Exception as e:
          st.error(f"Error fetching program names: {e}")
          return []
@@ -203,8 +199,7 @@ def get_available_years():
     """Get distinct years present in the program data."""
     db = DatabaseManager()
     try:
-        years = db.session.query(Program.year).distinct().order_by(Program.year.desc()).all()
-        return [y[0] for y in years if y[0]]
+        return db.get_available_years()
     except Exception as e:
         st.error(f"Error fetching available years: {e}")
         return [2024, 2023, 2022, 2021, 2020] # Fallback
@@ -838,41 +833,22 @@ def render_discipline_browsing(selected_years):
         disciplines = db.get_all_program_disciplines()
     finally:
         db.close()
-        
+
     if not disciplines:
         st.warning("数据库中暂无专业门类数据。")
         return
-        
+
     selected_discipline = st.selectbox("选择专业门类", disciplines)
-    
+
     if selected_discipline:
         db = DatabaseManager()
         try:
-            # Fetch programs for the selected discipline and years
-            query = db.session.query(Program).filter(
-                Program.discipline_category == selected_discipline,
-                Program.year.in_(selected_years)
-            ).options(joinedload(Program.school)) # Eager load school
-            
-            programs = query.order_by(Program.school_id, Program.year.desc(), Program.program_name).all()
-            
-            if programs:
+            df = db.get_discipline_browsing_data(selected_discipline, selected_years)
+
+            if not df.empty:
                 st.write(f"**'{selected_discipline}' 门类 - {', '.join(map(str, sorted(selected_years)))} 年录取数据**")
-                data = [{
-                    "年份": p.year,
-                    "学校": p.school.name if p.school else "N/A",
-                    "专业代码": p.program_code,
-                    "专业名称": p.program_name,
-                    "学习方式": p.program_type,
-                    "总分": p.total_score,
-                    "政治": p.politics_score,
-                    "外语": p.english_score,
-                    "业务课一": p.major_score1,
-                    "业务课二": p.major_score2,
-                } for p in programs]
-                df = pd.DataFrame(data)
                 st.dataframe(df.style.format({'总分': '{:.1f}', '政治': '{:.0f}', '外语': '{:.0f}', '业务课一': '{:.0f}', '业务课二': '{:.0f}'}))
-                
+
                 # Simple visualization: Average score trend for the discipline
                 if '总分' in df.columns and pd.to_numeric(df['总分'], errors='coerce').notna().any():
                      df['总分'] = pd.to_numeric(df['总分'], errors='coerce')
@@ -889,7 +865,7 @@ def render_discipline_browsing(selected_years):
                      st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info(f"在选定年份内没有找到 '{selected_discipline}' 门类的录取数据。")
-                
+
         except Exception as e:
             st.error(f"获取 {selected_discipline} 门类数据时出错: {e}")
         finally:

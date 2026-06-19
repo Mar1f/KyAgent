@@ -1,6 +1,6 @@
 from sqlalchemy import func
 from sqlalchemy.orm import sessionmaker, joinedload
-from app.database.models import engine, School, Program, SessionLocal
+from app.database.models import engine, School, Program, SessionLocal, User
 import pandas as pd
 import os
 from datetime import datetime
@@ -17,7 +17,27 @@ class DatabaseManager:
         """Close the database session"""
         self.session.close()
     
-    # --- School methods --- 
+    # --- User methods ---
+    def get_all_users(self):
+        """Get all users for authentication."""
+        return self.session.query(User).order_by(User.username).all()
+
+    def get_user_by_username(self, username):
+        """Get a user by username."""
+        return self.session.query(User).filter(User.username == username).first()
+
+    def create_user(self, name, username, hashed_password):
+        """Create and persist a new user."""
+        user = User(name=name, username=username, password=hashed_password)
+        self.session.add(user)
+        self.session.commit()
+        return user
+
+    def rollback(self):
+        """Rollback the current transaction."""
+        self.session.rollback()
+
+    # --- School methods ---
     def get_all_schools(self):
         """Get all schools"""
         return self.session.query(School).order_by(School.name).all()
@@ -91,8 +111,37 @@ class DatabaseManager:
         if years:
             query = query.filter(Program.year.in_(years))
         return query.options(joinedload(Program.school)).order_by(Program.school_id, Program.year.desc()).all()
-    
-    # --- Combined Queries for Analysis --- 
+
+    def get_distinct_program_names(self):
+        """Get sorted distinct program names."""
+        program_names = self.session.query(Program.program_name).distinct().order_by(Program.program_name).all()
+        return sorted([p[0] for p in program_names if p[0]])
+
+    def get_available_years(self):
+        """Get distinct years present in the program data."""
+        years = self.session.query(Program.year).distinct().order_by(Program.year.desc()).all()
+        return [y[0] for y in years if y[0]]
+
+    def get_discipline_browsing_data(self, discipline_category, years=None):
+        """Get discipline browsing rows formatted for the analysis page."""
+        programs = self.get_programs_by_discipline(discipline_category, years)
+        return pd.DataFrame([
+            {
+                "年份": p.year,
+                "学校": p.school.name if p.school else "N/A",
+                "专业代码": p.program_code,
+                "专业名称": p.program_name,
+                "学习方式": p.program_type,
+                "总分": p.total_score,
+                "政治": p.politics_score,
+                "外语": p.english_score,
+                "业务课一": p.major_score1,
+                "业务课二": p.major_score2,
+            }
+            for p in programs
+        ])
+
+    # --- Combined Queries for Analysis ---
     def get_admission_data_for_school(self, school_name, years=None):
         """Get structured admission data (programs) for a specific school."""
         school = self.get_school_by_name(school_name)
