@@ -105,7 +105,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-> 说明：当前 `requirements.txt` 仍有进一步整理空间，但可以作为现有依赖入口。
+当前 `requirements.txt` 已整理为 UTF-8 的最小运行依赖集合，适合作为项目安装入口。
 
 ---
 
