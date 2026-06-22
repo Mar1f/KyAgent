@@ -13,7 +13,17 @@ from langchain_community.tools.tavily_search import TavilySearchResults
 
 from langchain.tools import Tool
 from sqlalchemy import create_engine
-from app_config import DATABASE_URL, OPENAI_API_URL, OPENAI_API_KEY, TAVILY_API_KEY, SERPER_API_KEY, MODEL
+from app_config import (
+    DATABASE_URL,
+    OPENAI_API_URL,
+    OPENAI_API_KEY,
+    TAVILY_API_KEY,
+    SERPER_API_KEY,
+    MODEL,
+    LLM_ENV_VARS,
+    SEARCH_ENV_VARS,
+    validate_required_env,
+)
 from app.utils.prompt_templates import AGENT_SYSTEM_PROMPT
 
 import warnings
@@ -22,6 +32,8 @@ warnings.filterwarnings("ignore", category=UserWarning, module="langsmith")
 
 class LangChainManager:
     def __init__(self):
+        self.validate_configuration()
+
         # Initialize LLM using imported key and proxy base_url
         self.llm = ChatOpenAI(
             api_key=OPENAI_API_KEY,
@@ -46,6 +58,11 @@ class LangChainManager:
 
         # Setup agent
         self.setup_agent()
+
+    def validate_configuration(self):
+        """Validate required configuration before building the agent stack."""
+        validate_required_env(LLM_ENV_VARS, context="LangChainManager LLM setup")
+        validate_required_env(SEARCH_ENV_VARS, context="LangChainManager search setup")
 
     def setup_search_tools(self):
         """Setup search tools for retrieving information from the web"""
