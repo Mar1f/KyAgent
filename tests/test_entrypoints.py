@@ -18,6 +18,15 @@ import test_openai_api
 
 
 class RunEntrypointTests(unittest.TestCase):
+    @patch("run.input", return_value="n")
+    def test_main_exits_when_no_virtual_environment_and_user_declines(self, mock_input):
+        with patch.dict(os.environ, {}, clear=True):
+            with self.assertRaises(SystemExit) as ctx:
+                run.main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        mock_input.assert_called_once()
+
     @patch("run.subprocess.run")
     @patch("run.input", return_value="y")
     @patch("mysql.connector.connect")
@@ -44,6 +53,20 @@ class RunEntrypointTests(unittest.TestCase):
 
         self.assertEqual(ctx.exception.code, 1)
         mock_validate.assert_called_once()
+        mock_subprocess.assert_not_called()
+
+    @patch("run.subprocess.run")
+    @patch("run.input", return_value="n")
+    @patch("mysql.connector.connect", side_effect=RuntimeError("mysql down"))
+    @patch("app_config.validate_required_env")
+    def test_main_exits_when_mysql_unreachable_and_user_declines(self, mock_validate, mock_connect, mock_input, mock_subprocess):
+        with patch.dict(os.environ, {"DB_HOST": "localhost", "DB_PORT": "3306", "DB_USER": "tester", "DB_PASSWORD": "secret", "VIRTUAL_ENV": "/tmp/venv"}, clear=False):
+            with self.assertRaises(SystemExit) as ctx:
+                run.main()
+
+        self.assertEqual(ctx.exception.code, 0)
+        mock_validate.assert_called_once()
+        mock_connect.assert_called_once()
         mock_subprocess.assert_not_called()
 
 
@@ -74,6 +97,18 @@ class SetupEntrypointTests(unittest.TestCase):
         mock_run.return_value = SimpleNamespace(stdout="ok", stderr="")
         with patch("setup.os.path.exists", return_value=True):
             self.assertTrue(setup.run_data_loader())
+
+    @patch("setup.run_data_loader", return_value=False)
+    @patch("setup.create_database", return_value=True)
+    def test_main_continues_when_data_loader_fails(self, mock_create_database, mock_run_data_loader):
+        buf = io.StringIO()
+        with redirect_stdout(buf):
+            setup.main()
+
+        output = buf.getvalue()
+        self.assertIn("Step 2 Failed", output)
+        mock_create_database.assert_called_once()
+        mock_run_data_loader.assert_called_once()
 
 
 class TestOpenAIEntrypointTests(unittest.TestCase):

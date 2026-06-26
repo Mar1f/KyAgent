@@ -29,6 +29,34 @@ class ValidateRequiredEnvTests(unittest.TestCase):
 
 
 class LangChainManagerValidationTests(unittest.TestCase):
+    @patch("app.api.langchain_setup.ChatOpenAI")
+    @patch("app.api.langchain_setup.SQLDatabaseToolkit")
+    @patch("app.api.langchain_setup.SQLDatabase")
+    @patch("app.api.langchain_setup.create_engine")
+    @patch("app.api.langchain_setup.GoogleSerperAPIWrapper")
+    @patch("app.api.langchain_setup.TavilySearchResults", side_effect=RuntimeError("tavily down"))
+    @patch.object(LangChainManager, "setup_agent")
+    def test_langchain_manager_falls_back_to_dummy_tavily_tool(self, mock_setup_agent, mock_tavily, mock_serper, mock_create_engine, mock_sql_db, mock_sql_toolkit, mock_chat_openai):
+        env = {
+            "DB_USER": "tester",
+            "DB_PASSWORD": "secret",
+            "DB_HOST": "localhost",
+            "DB_PORT": "3306",
+            "DB_NAME": "kyagent_test",
+            "OPENAI_API_KEY": "openai-key",
+            "MODEL": "gpt-4o-mini",
+            "TAVILY_API_KEY": "tavily-key",
+            "SERPER_API_KEY": "serper-key",
+        }
+        mock_sql_toolkit.return_value.get_tools.return_value = []
+        with patch.dict(os.environ, env, clear=True):
+            manager = LangChainManager()
+
+        self.assertEqual(manager.search_tools[0].name, "Google Search")
+        self.assertEqual(manager.search_tools[1].name, "Tavily Search")
+        self.assertEqual(manager.search_tools[1].func("query"), "Tavily Search tool initialization failed.")
+        mock_setup_agent.assert_called_once()
+
     def test_langchain_manager_requires_llm_env(self):
         env = {
             "DB_USER": "tester",
