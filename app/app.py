@@ -16,12 +16,11 @@ import streamlit_authenticator as stauth
 import bcrypt
 # --- END ADDED IMPORTS ---
 
-# --- Ensure project root is in sys.path --- 
+# --- Ensure project root is in sys.path ---
 # Get the directory containing the 'app' folder (project root)
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
-    sys.path.insert(0, project_root) # Insert at beginning
-    print(f"[Debug] Added to sys.path: {project_root}") # Optional debug print
+    sys.path.insert(0, project_root)
 # --- End Path Addition ---
 
 # Now imports should work relative to the project root
