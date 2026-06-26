@@ -16,25 +16,22 @@ import streamlit_authenticator as stauth
 import bcrypt
 # --- END ADDED IMPORTS ---
 
-# --- Ensure project root is in sys.path --- 
+# --- Ensure project root is in sys.path ---
 # Get the directory containing the 'app' folder (project root)
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
-    sys.path.insert(0, project_root) # Insert at beginning
-    print(f"[Debug] Added to sys.path: {project_root}") # Optional debug print
+    sys.path.insert(0, project_root)
 # --- End Path Addition ---
 
 # Now imports should work relative to the project root
 try:
     from app.api.langchain_setup import LangChainManager
     from app.database.db_manager import DatabaseManager
-    from app.database.models import Program, User # Import User model
-    from sqlalchemy.orm import joinedload # Import joinedload if needed elsewhere, maybe discipline browsing
 except ImportError as e:
     st.error(f"Fatal Error: Could not import necessary modules: {e}")
     st.error(f"Project Root added to path: {project_root}")
     st.error(f"Current sys.path: {sys.path}")
-    st.error("Please ensure the project structure is correct, the User model exists in models.py, and all dependencies are installed.")
+    st.error("Please ensure the project structure is correct and all dependencies are installed.")
     st.stop() # Stop execution if imports fail
 
 # init_db is primarily for setup, not usually called directly by the app
@@ -43,24 +40,17 @@ except ImportError as e:
 # --- Database Helper Functions for Users ---
 
 # @st.cache_data # Cache user data for a short time? Maybe not for auth.
-def fetch_all_users_from_db():
-    """Fetches all users from the database for the authenticator."""
+def fetch_auth_credentials_from_db():
+    """Fetch authenticator credentials from the users table."""
     db = DatabaseManager()
     try:
-        users = db.session.query(User).all()
-        # Convert User objects to dictionary format needed by authenticator
-        user_list = [{
-            "username": user.username,
-            "name": user.name,
-            "password": user.password # Assuming password field stores the hash
-        } for user in users]
-        return user_list
+        return db.get_auth_credentials()
     except Exception as e:
         st.error(f"Error fetching users from database: {e}")
         # If the User table doesn't exist yet, this will fail.
         # Consider handling the specific exception for "table not found"
-        # For now, return empty list on error.
-        return []
+        # For now, return empty credentials on error.
+        return {"usernames": {}}
     finally:
         db.close()
 
@@ -69,19 +59,17 @@ def add_user_to_db(name, username, hashed_password):
     db = DatabaseManager()
     try:
         # Check if username already exists
-        existing_user = db.session.query(User).filter(User.username == username).first()
+        existing_user = db.get_user_by_username(username)
         if existing_user:
             st.error(f"Username '{username}' already exists.")
             return False
 
         # Create new user
-        new_user = User(name=name, username=username, password=hashed_password)
-        db.session.add(new_user)
-        db.session.commit()
+        db.create_user(name=name, username=username, hashed_password=hashed_password)
         st.success(f"User '{username}' registered successfully.")
         return True
     except Exception as e:
-        db.session.rollback() # Rollback in case of error
+        db.rollback() # Rollback in case of error
         st.error(f"Database error during registration: {e}")
         return False
     finally:
@@ -117,16 +105,7 @@ def get_school_stats():
     """Get basic school statistics including province and doctoral programs."""
     db = DatabaseManager()
     try:
-        schools = db.get_all_schools()
-        # Ensure province and doctoral_programs are included
-        school_data = [{
-            "name": s.name,
-            "province": s.province, # Needed for heatmap/distribution
-            "type": s.type,
-            "master_programs": s.master_programs,
-            "doctoral_programs": s.doctoral_programs, # Needed for PhD chart
-        } for s in schools]
-        return pd.DataFrame(school_data)
+        return db.get_school_stats_data()
     except Exception as e:
         st.error(f"Error fetching school stats: {e}")
         return pd.DataFrame()
@@ -176,8 +155,7 @@ def get_all_school_names():
      """Get a list of all school names."""
      db = DatabaseManager()
      try:
-         schools = db.get_all_schools()
-         return sorted([s.name for s in schools])
+         return db.get_school_names()
      except Exception as e:
          st.error(f"Error fetching school names: {e}")
          return []
@@ -189,9 +167,7 @@ def get_all_program_names():
      """Get a list of distinct program names."""
      db = DatabaseManager()
      try:
-         # Query distinct program names
-         program_names = db.session.query(Program.program_name).distinct().order_by(Program.program_name).all()
-         return sorted([p[0] for p in program_names if p[0]])
+         return db.get_distinct_program_names()
      except Exception as e:
          st.error(f"Error fetching program names: {e}")
          return []
@@ -203,8 +179,7 @@ def get_available_years():
     """Get distinct years present in the program data."""
     db = DatabaseManager()
     try:
-        years = db.session.query(Program.year).distinct().order_by(Program.year.desc()).all()
-        return [y[0] for y in years if y[0]]
+        return db.get_available_years()
     except Exception as e:
         st.error(f"Error fetching available years: {e}")
         return [2024, 2023, 2022, 2021, 2020] # Fallback
@@ -255,15 +230,8 @@ def main():
         
     # --- Authentication Logic ---
     # Fetch users and prepare credentials dict
-    users = fetch_all_users_from_db()
-    credentials = {"usernames": {}}
-    if users: # Handle case where DB query fails or table is empty
-        for user in users:
-            credentials["usernames"][user['username']] = {
-                "name": user['name'],
-                "password": user['password'] # The stored hash
-            }
-    else:
+    credentials = fetch_auth_credentials_from_db()
+    if not credentials["usernames"]:
         st.warning("没有找到用户信息。请先注册用户")
         # Allow registration even if fetching fails initially
 
@@ -281,10 +249,8 @@ def main():
     )
 
     # --- Render Login/Registration (Using Buttons, No Tabs) ---
-    if "authentication_status" not in st.session_state:
-        st.session_state.authentication_status = None # Initialize if not exists
-    if "show_register_form" not in st.session_state:
-        st.session_state.show_register_form = False # Default to showing login
+    st.session_state.setdefault("authentication_status", None)
+    st.session_state.setdefault("show_register_form", False)
 
     # Only show login/register if not authenticated
     if not st.session_state.authentication_status:
@@ -838,41 +804,22 @@ def render_discipline_browsing(selected_years):
         disciplines = db.get_all_program_disciplines()
     finally:
         db.close()
-        
+
     if not disciplines:
         st.warning("数据库中暂无专业门类数据。")
         return
-        
+
     selected_discipline = st.selectbox("选择专业门类", disciplines)
-    
+
     if selected_discipline:
         db = DatabaseManager()
         try:
-            # Fetch programs for the selected discipline and years
-            query = db.session.query(Program).filter(
-                Program.discipline_category == selected_discipline,
-                Program.year.in_(selected_years)
-            ).options(joinedload(Program.school)) # Eager load school
-            
-            programs = query.order_by(Program.school_id, Program.year.desc(), Program.program_name).all()
-            
-            if programs:
+            df = db.get_discipline_browsing_data(selected_discipline, selected_years)
+
+            if not df.empty:
                 st.write(f"**'{selected_discipline}' 门类 - {', '.join(map(str, sorted(selected_years)))} 年录取数据**")
-                data = [{
-                    "年份": p.year,
-                    "学校": p.school.name if p.school else "N/A",
-                    "专业代码": p.program_code,
-                    "专业名称": p.program_name,
-                    "学习方式": p.program_type,
-                    "总分": p.total_score,
-                    "政治": p.politics_score,
-                    "外语": p.english_score,
-                    "业务课一": p.major_score1,
-                    "业务课二": p.major_score2,
-                } for p in programs]
-                df = pd.DataFrame(data)
                 st.dataframe(df.style.format({'总分': '{:.1f}', '政治': '{:.0f}', '外语': '{:.0f}', '业务课一': '{:.0f}', '业务课二': '{:.0f}'}))
-                
+
                 # Simple visualization: Average score trend for the discipline
                 if '总分' in df.columns and pd.to_numeric(df['总分'], errors='coerce').notna().any():
                      df['总分'] = pd.to_numeric(df['总分'], errors='coerce')
@@ -889,7 +836,7 @@ def render_discipline_browsing(selected_years):
                      st.plotly_chart(fig, use_container_width=True)
             else:
                 st.info(f"在选定年份内没有找到 '{selected_discipline}' 门类的录取数据。")
-                
+
         except Exception as e:
             st.error(f"获取 {selected_discipline} 门类数据时出错: {e}")
         finally:
