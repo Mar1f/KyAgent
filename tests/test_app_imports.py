@@ -1,6 +1,7 @@
 import io
 import os
 import unittest
+import warnings
 from contextlib import redirect_stdout
 from unittest.mock import patch
 
@@ -30,6 +31,21 @@ class AppImportTests(unittest.TestCase):
 
         output = buf.getvalue()
         self.assertNotIn("[Debug] Added to sys.path", output)
+        mock_set_page_config.assert_called_once()
+
+    @patch("streamlit.set_page_config")
+    def test_importing_app_module_does_not_emit_invalid_escape_warning(self, mock_set_page_config):
+        import importlib
+        import sys
+
+        sys.modules.pop("app.app", None)
+
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            importlib.import_module("app.app")
+
+        invalid_escape = [warning for warning in caught if "invalid escape sequence" in str(warning.message)]
+        self.assertEqual(invalid_escape, [])
         mock_set_page_config.assert_called_once()
 
 

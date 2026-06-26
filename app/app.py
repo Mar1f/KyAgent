@@ -202,9 +202,9 @@ def parse_markdown_table(md_string):
         # Read using pandas, guessing separator, skipping initial spaces
         # header=0 tells pandas the first line is the header
         # skipinitialspace=True helps with spacing around pipes
-        # sep='\s*\|\s*' uses pipe as separator, allowing optional spaces
+        # sep=r'\s*\|\s*' uses pipe as separator, allowing optional spaces
         # engine='python' might be needed for complex separators
-        df = pd.read_csv(StringIO(table_md), sep='\s*\|\s*', engine='python', skiprows=[1], skipinitialspace=True)
+        df = pd.read_csv(StringIO(table_md), sep=r'\s*\|\s*', engine='python', skiprows=[1], skipinitialspace=True)
         
         # Remove empty first/last columns if they exist due to leading/trailing pipes
         if df.columns[0].strip() == '': df = df.iloc[:, 1:]
